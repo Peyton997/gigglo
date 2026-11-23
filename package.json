@@ -1,0 +1,15 @@
+{
+  "name": "gigglo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": { "start": "bun run index.ts" },
+  "dependencies": {
+    "@discordjs/voice": "latest",
+    "@ffmpeg-installer/ffmpeg": "latest",
+    "@napi-rs/canvas": "latest",
+    "discord.js": "latest",
+    "libsodium-wrappers": "latest",
+    "opusscript": "latest",
+    "play-dl": "latest"
+  }
+}
