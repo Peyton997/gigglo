@@ -17,3 +17,7 @@ try {
 } catch (e) {
   console.error('Bot code failed to load:', e);
 }
+
+// Keep Render's free tier awake: ping our own public URL every 10 minutes.
+const selfUrl = Bun.env.RENDER_EXTERNAL_URL;
+if (selfUrl) setInterval(() => { fetch(selfUrl).catch(() => {}); }, 10 * 60 * 1000);
