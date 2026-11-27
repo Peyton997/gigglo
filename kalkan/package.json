@@ -1,0 +1,7 @@
+{
+  "name": "kalkan",
+  "private": true,
+  "type": "commonjs",
+  "description": "Kalkan security module embedded in Gigglo (CommonJS)",
+  "scripts": { "test": "node --test test/*.test.js", "check": "node tools/check.js" }
+}

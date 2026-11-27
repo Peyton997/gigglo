@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Kalkan — Doğrulama kodu</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --text:#1d2330; --muted:#5b6475; --accent:#3b6df0; --border:#dfe3ea; --code:#eef1f7; --ok:#1c8c4e; --err:#c0392b; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171e; --card:#1d222c; --text:#e8ebf2; --muted:#9aa3b5; --accent:#6f95ff; --border:#2b3240; --code:#12151b; --ok:#4cc38a; --err:#ff7a6b; } }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:16px; }
+  main { width:100%; max-width:520px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; }
+  h1 { font-size:1.25rem; margin:0 0 8px; }
+  p { margin:8px 0; color:var(--muted); }
+  .code { margin:16px 0 8px; padding:14px; border-radius:10px; background:var(--code); border:1px solid var(--border); font:600 .95rem ui-monospace,Menlo,Consolas,monospace; word-break:break-all; color:var(--text); user-select:all; }
+  button { appearance:none; border:0; border-radius:10px; background:var(--accent); color:#fff; font:600 1rem inherit; padding:12px 16px; width:100%; cursor:pointer; }
+  button:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  ol { margin:12px 0 0; padding-left:1.2rem; color:var(--muted); }
+  li { margin:4px 0; }
+  .ok { color:var(--ok); } .err { color:var(--err); }
+  small { display:block; margin-top:16px; color:var(--muted); }
+  code { background:var(--code); padding:1px 6px; border-radius:6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">Kalkan — Doğrulama</h1>
+  <div id="view"><p>Yükleniyor…</p></div>
+  <small>Bu sayfa statiktir: kodu hiçbir yere göndermez, yalnızca tarayıcında gösterir. Kodu yalnızca Kalkan botuna (<code>/hesap kod</code>) yaz; başka kimseyle paylaşma.</small>
+</main>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var code = q.get('code');
+  var err = q.get('error');
+  var view = document.getElementById('view');
+  var title = document.getElementById('title');
+  function el(tag, text, cls) { var e = document.createElement(tag); if (text) e.textContent = text; if (cls) e.className = cls; return e; }
+
+  if (err) {
+    title.textContent = 'İptal edildi';
+    view.replaceChildren(el('p', 'Yetkilendirmeyi iptal ettin. Sorun değil; istersen Discord\'daki bağlantıdan tekrar deneyebilirsin.'));
+    return;
+  }
+  if (!code || code.length > 200) {
+    title.textContent = 'Kod bulunamadı';
+    view.replaceChildren(el('p', 'Bu sayfa yalnızca Discord yetkilendirmesinden sonra açılır. Botun gönderdiği bağlantıyla yeniden başla.'));
+    return;
+  }
+  // Kodu adres çubuğundan ve geçmişten kaldır (omuz üstünden görülmesin / ekran görüntüsüne girmesin).
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+
+  title.textContent = 'Kodun hazır ✅';
+  var box = el('div', code, 'code');
+  var btn = el('button', 'Kodu kopyala');
+  var note = el('p', '', 'ok');
+  btn.addEventListener('click', function () {
+    function done(ok) { note.textContent = ok ? 'Kopyalandı. Şimdi Discord\'a dön.' : 'Otomatik kopyalanamadı; kodu elle seçip kopyala.'; note.className = ok ? 'ok' : 'err'; }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code).then(function () { done(true); }, function () { done(false); });
+    else { var r = document.createRange(); r.selectNodeContents(box); var s = getSelection(); s.removeAllRanges(); s.addRange(r); try { done(document.execCommand('copy')); } catch (e) { done(false); } }
+  });
+  var steps = el('ol');
+  ['Kodu kopyala.', 'Discord\'a dön ve sunucuda ', 'Çıkan alana kodu yapıştırıp gönder.'].forEach(function (t, i) {
+    var li = el('li');
+    if (i === 1) { li.appendChild(document.createTextNode(t)); li.appendChild(el('code', '/hesap kod')); li.appendChild(document.createTextNode(' yaz.')); }
+    else li.textContent = t;
+    steps.appendChild(li);
+  });
+  view.replaceChildren(el('p', 'Doğrulamayı tamamlamak için bu kodu Discord\'da botla paylaş. Kod kısa süre geçerlidir ve yalnızca bir kez kullanılabilir.'), box, btn, note, steps);
+})();
+</script>
+</body>
+</html>

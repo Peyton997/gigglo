@@ -2,7 +2,9 @@
   "name": "gigglo",
   "version": "1.0.0",
   "type": "module",
-  "scripts": { "start": "bun run index.ts" },
+  "scripts": {
+    "start": "bun run index.ts"
+  },
   "dependencies": {
     "@discordjs/voice": "latest",
     "@ffmpeg-installer/ffmpeg": "latest",
@@ -10,6 +12,7 @@
     "discord.js": "latest",
     "libsodium-wrappers": "latest",
     "opusscript": "latest",
-    "play-dl": "latest"
+    "play-dl": "latest",
+    "adm-zip": "latest"
   }
 }
