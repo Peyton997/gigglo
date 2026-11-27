@@ -239,13 +239,19 @@ export async function load() {
     return lines;
   };
 
-  async function onEnable(guild) {
+  // Runs once per server per process (the member list request is rate limited by Discord: ~1 per 30 s per server).
+  const activated = new Set();
+  async function onEnable(guild, attempt = 1) {
+    if (attempt === 1) { if (activated.has(guild.id)) return; activated.add(guild.id); }
     try {
       if (ctx.members) await ctx.members.sync(guild);
       if (ctx.recovery) ctx.recovery.touch(guild);
       if (ctx.raid) await ctx.raid.refreshInvites(guild);
       console.log(`[kalkan] active in ${guild.name} (${guild.id})`);
-    } catch (e) { log.error(`[kalkan] enable failed (${guild.name}):`, e); }
+    } catch (e) {
+      log.error(`[kalkan] enable failed (${guild.name}):`, e);
+      if (attempt < 3) { const t = setTimeout(() => onEnable(guild, attempt + 1), 35000); t.unref?.(); }
+    }
   }
 
   async function refreshGate() {
