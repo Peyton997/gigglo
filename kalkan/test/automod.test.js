@@ -108,7 +108,7 @@ test('Yeni üye arşiv/çalıştırılabilir dosya gönderemez; gizli anahtar s�
     const att = [{ name: 'oyun.exe', size: 1000, url: 'https://cdn.discordapp.com/attachments/1/2/oyun.exe', contentType: 'application/octet-stream' }];
     const r = await s.say('bunu dene', { attachments: att });
     assert.ok(r.findings.some((f) => f.file || f.rule === 'file' || f.rule === 'executable'), JSON.stringify(r.findings.map((f) => f.rule)));
-    const tok = await s.say(['token: MTA1NjY2NjY2NjY2NjY2NjY2', 'GaBcDe', 'abcdefghijklmnopqrstuvwxyz0123456789ab'].join('.')  // sahte; parçalı yazıldı (GitHub secret-scanning));
+    const tok = await s.say(['token: MTA1NjY2NjY2NjY2NjY2NjY2', 'GaBcDe', 'abcdefghijklmnopqrstuvwxyz0123456789ab'].join('.')); // sahte token, parçalı yazıldı (GitHub secret-scanning)
     const sec = tok.findings.find((f) => f.rule === 'secret');
     if (sec) assert.equal(sec.victim, true);
   } finally { s.cleanup(); }
