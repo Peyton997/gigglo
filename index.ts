@@ -12,6 +12,10 @@ process.on('uncaughtException', (e: any) => console.error('[uncaughtException]',
 
 const dir = import.meta.dir;
 (globalThis as any).__loadMusic = () => import(dir + '/music.mjs');
+// Kalkan security module: only when KALKAN=1 (needs the Server Members intent enabled in the Discord Developer Portal).
+if (Bun.env.KALKAN === '1') {
+  (globalThis as any).__loadKalkan = async () => { const m = await import(dir + '/kalkan-adapter.mjs'); await m.load(); };
+}
 try {
   await import(dir + '/bot.tsx');
 } catch (e) {
