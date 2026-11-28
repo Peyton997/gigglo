@@ -11,7 +11,7 @@ Gigglo is a trilingual (EN/TR/AZ) Discord bot: **games** (57 fun/casino/social c
 | `kalkan-adapter.mjs` + `kalkan/` | Kalkan security module (anti-nuke, auto-moderation, raid shield, backups, recovery…). |
 
 ## Environment variables
-`DISCORD_TOKEN`, `CLIENT_ID`, `OWNER_IDS`, `DATABASE_URL` (Postgres, e.g. Neon) — required.
+`DISCORD_TOKEN`, `CLIENT_ID`, `OWNER_IDS`, `DATABASE_URL` (Postgres, e.g. Neon) — required. Optional `EXTRA_OWNER_IDS` (comma-separated Discord IDs) adds more owners without touching `OWNER_IDS`.
 `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET`, `YT_COOKIE` — optional (music).
 
 ### Security module (Kalkan)
