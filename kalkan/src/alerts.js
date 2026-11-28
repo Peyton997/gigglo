@@ -62,7 +62,7 @@ function createAlerts(ctx) {
     return jobs.length;
   }
 
-  async function alert({ guild = null, guildId = null, level = 'warn', title, description = '', fields = [], key = null }) {
+  async function alert({ guild = null, guildId = null, level = 'warn', title, description = '', fields = [], key = null, components = null }) {
     try {
       const gid = (guild && guild.id) || guildId || 'global';
       if (key) {
@@ -84,12 +84,12 @@ function createAlerts(ctx) {
       }
       if (g) {
         const cfg = ctx.gcfg(g.id);
-        await sendToChannel(g, cfg.channels.alert || cfg.channels.log, { embeds: [embed] });
+        await sendToChannel(g, cfg.channels.alert || cfg.channels.log, { embeds: [embed], ...(components ? { components } : {}) });
       }
       if (level === 'high' || level === 'critical') {
         const ids = new Set(env.ownerIds);
         if (level === 'critical') for (const id of env.backupOwnerIds) ids.add(id);
-        for (const id of ids) ctx.dm(id, { embeds: [embed] }).catch(() => {});
+        for (const id of ids) ctx.dm(id, { embeds: [embed], ...(components ? { components } : {}) }).catch(() => {});
         externalAlert(level, title, `${description}\n${fields.map((f) => `${f.name}: ${f.value}`).join('\n')}`).catch(() => {});
       }
       if (ctx.events) ctx.events.append(gid, { type: 'ALERT', level, name: title });

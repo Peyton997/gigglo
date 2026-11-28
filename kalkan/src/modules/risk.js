@@ -1,5 +1,6 @@
 'use strict';
 // Risk skoru: şüpheli sinyaller birikir (yarı ömür 6 saat). Eşik aşılınca uyarı, yüksek eşikte geri alınabilir önlem.
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { criticalList } = require('../util');
 
 function init(ctx) {
@@ -95,7 +96,25 @@ function init(ctx) {
         description: 'Alınan önlemlerin hepsi geri alınabilir. Karar yetkililerde: gerekirse `/uye geri-al` ile roller iade edilir.',
         fields: [...fields, { name: 'Alınan önlemler', value: actions.join(', ') || 'Yapılamadı (bot yetkisi yetersiz olabilir)' }],
         key: `risk-contain:${userId}`,
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`kb:restore:${guild.id}:${userId}`).setLabel('Kullanıcının yetkisini geri yükle').setEmoji('🔓').setStyle(ButtonStyle.Primary),
+        )],
       });
+    },
+
+    // Otomatik önlemleri geri al: roller, susturma, risk skoru. Üye sunucuda değilse null döner.
+    async undo(guild, userId, actor = 'yetkili') {
+      const mem = await guild.members.fetch(userId).catch(() => null);
+      if (!mem) return null;
+      const done = [];
+      const n = await api.restoreRoles(guild, userId).catch(() => 0);
+      if (n) done.push(`${n} rol iade edildi`);
+      if (mem.communicationDisabledUntilTimestamp > Date.now()) {
+        try { await mem.timeout(null, `Kalkan: ${actor} geri aldı`); done.push('susturma kaldırıldı'); } catch { done.push('susturma kaldırılamadı (yetki)'); }
+      }
+      const m = ctx.members.get(guild.id, userId);
+      if (m && m.risk && m.risk.score) { m.risk = { score: 0, at: Date.now(), reasons: [] }; store.save(); done.push('risk skoru sıfırlandı'); }
+      return done;
     },
 
     async restoreRoles(guild, userId) {

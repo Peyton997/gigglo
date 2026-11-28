@@ -1,7 +1,10 @@
 'use strict';
 // Denetim günlüğü hattı: her olayı diske yedekler; anti-nuke sayaçları, rol koruması, bot ekleme koruması, süreli yetki kilidi.
-const { Events, AuditLogEvent: A } = require('discord.js');
-const { criticalList, toBig, CRIT_MASK, code } = require('../util');
+const {
+  Events, AuditLogEvent: A, SlashCommandBuilder, PermissionFlagsBits, InteractionContextType, MessageFlags,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle,
+} = require('discord.js');
+const { criticalList, toBig, CRIT_MASK, code, respond } = require('../util');
 
 const COUNT_MAP = {
   [A.ChannelDelete]: 'channelDelete',
@@ -25,6 +28,7 @@ const counters = new Map();
 const bursts = new Map();
 const flagged = new Map();
 const restoreTimers = new Map();
+const botAddSeen = new Map(); // gid:yapan:bot → son ekleme zamanı (aynı botu tekrar eklemek risk puanını katlamasın)
 
 function describe(entry, typeName) {
   const ch = entry.changes || [];
@@ -256,31 +260,108 @@ function init(ctx) {
     });
   }
 
+  function botRow(gid, botId, execId) {
+    return new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId(`kb:allow:${gid}:${botId}`).setLabel('Bu bota izin ver').setEmoji('✅').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`kb:restore:${gid}:${execId}`).setLabel('Kullanıcının yetkisini geri yükle').setEmoji('🔓').setStyle(ButtonStyle.Primary),
+    );
+  }
+
   async function guardBotAdd(entry, guild) {
     const botId = entry.targetId;
     const exec = entry.executorId;
+    const cfg = ctx.gcfg(guild.id);
     const member = await guild.members.fetch(botId).catch(() => null);
     const perms = member ? criticalList(member.permissions) : [];
+    const allowedBot = (cfg.allowedBots || []).includes(botId);
     const trusted = ctx.isTrusted(guild, exec) && !(ctx.isNight(guild.id) && !ctx.isBotOwner(exec));
-    if (!trusted) {
+    if (!trusted && !allowedBot) {
       let action = 'tespit edildi';
       if (member) {
         try { await member.kick('Kalkan: yetkisiz bot ekleme'); action = 'bot sunucudan atıldı'; } catch { action = 'bot atılamadı (rol sırasını kontrol et)'; }
       }
-      if (ctx.risk) await ctx.risk.signal(guild, exec, 40, 'Yetkisiz bot ekledi');
+      const seenKey = `${guild.id}:${exec}:${botId}`;
+      const repeat = Date.now() - (botAddSeen.get(seenKey) || 0) < 30 * 60e3;
+      botAddSeen.set(seenKey, Date.now());
+      if (botAddSeen.size > 500) for (const [k, t] of botAddSeen) if (Date.now() - t > 30 * 60e3) botAddSeen.delete(k);
+      if (ctx.risk && !repeat) await ctx.risk.signal(guild, exec, 40, 'Yetkisiz bot ekledi');
       ctx.stat(guild.id, 'botKick');
       await ctx.alert({
         guild, level: 'high', title: 'Yetkisiz bot ekleme',
-        description: `<@${exec}> sunucuya <@${botId}> botunu ekledi → ${action}.\nBotun kritik yetkileri: ${perms.join(', ') || 'yok'}`,
+        description: `<@${exec}> sunucuya <@${botId}> botunu ekledi → ${action}.\nBotun kritik yetkileri: ${perms.join(', ') || 'yok'}${repeat ? '\nAynı bot kısa süre önce de eklenmişti; risk puanı tekrar artırılmadı.' : ''}\n\nBu bot güvenilirse aşağıdan izin ver, sonra yeniden eklenebilir.`,
         key: `botadd:${botId}`,
+        components: [botRow(guild.id, botId, exec)],
       });
     } else {
       await ctx.alert({
-        guild, level: perms.length ? 'warn' : 'info', title: 'Yeni bot eklendi',
+        guild, level: perms.length ? 'warn' : 'info', title: allowedBot && !trusted ? 'İzinli bot eklendi' : 'Yeni bot eklendi',
         description: `<@${exec}> → <@${botId}>\nKritik yetkiler: ${perms.join(', ') || 'yok'}${perms.length ? '\nBotun gerçekten bu yetkilere ihtiyacı var mı kontrol et.' : ''}`,
       });
     }
   }
+
+  // Düğmeler (sunucu kanalında ve bot sahibine giden DM'de çalışır; kimlik düğmenin içinde taşınır).
+  ctx.router.button('kb:', async (i) => {
+    const [, act, gid, id] = i.customId.split(':');
+    const guild = client.guilds.cache.get(gid);
+    if (!guild) return respond(i, '❌ Sunucuya erişilemiyor.');
+    const admin = ctx.canAdmin(guild, i.user.id);
+    if (act === 'allow') {
+      if (!admin) return respond(i, '🔒 Bot izni yalnızca bot sahibi içindir.');
+      const cfg = ctx.gcfg(gid);
+      cfg.allowedBots = cfg.allowedBots || [];
+      if (!cfg.allowedBots.includes(id)) cfg.allowedBots.push(id);
+      ctx.save();
+      ctx.events.append(gid, { type: 'BOT_ALLOW', actor: i.user.id, target: id });
+      await ctx.alert({ guild, level: 'info', title: 'Bot izin listesine eklendi', description: `<@${i.user.id}> <@${id}> botuna izin verdi. Bot artık eklenince atılmaz; yeniden eklenebilir.` });
+      try {
+        const row = ActionRowBuilder.from(i.message.components[0]);
+        for (const b of row.components) if (b.data.custom_id === i.customId) b.setDisabled(true).setLabel('İzin verildi').setStyle(ButtonStyle.Secondary);
+        return await i.update({ components: [row] });
+      } catch {
+        return respond(i, '✅ Bot izin listesine eklendi. Şimdi yeniden ekleyebilirsin.');
+      }
+    }
+    if (act === 'restore') {
+      if (!admin && !ctx.isTrusted(guild, i.user.id)) return respond(i, '🔒 Bu işlem yalnızca güvenilir yetkililer içindir.');
+      await i.deferReply({ flags: MessageFlags.Ephemeral });
+      const done = ctx.risk ? await ctx.risk.undo(guild, id, i.user.username) : [];
+      if (done === null) return respond(i, 'ℹ️ Üye sunucuda değil.');
+      ctx.events.append(gid, { type: 'UNDO', actor: i.user.id, target: id });
+      await ctx.alert({ guild, level: 'info', title: 'Önlemler geri alındı', description: `<@${i.user.id}>, <@${id}> için otomatik önlemleri geri aldı.\n${done.join(', ') || 'Geri alınacak bir şey yoktu.'}` });
+      return respond(i, done.length ? `✅ ${done.join(', ')}.` : 'ℹ️ Geri alınacak bir şey yoktu.');
+    }
+  }, { dm: true });
+
+  ctx.router.add(
+    new SlashCommandBuilder().setName('bot-izin').setDescription('Eklenince atılmayacak (güvenilir) botlar')
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator).setContexts(InteractionContextType.Guild)
+      .addSubcommand((s) => s.setName('ekle').setDescription('Bir bota izin ver (bot kimliği)')
+        .addStringOption((o) => o.setName('id').setDescription('Botun kullanıcı kimliği').setRequired(true)))
+      .addSubcommand((s) => s.setName('sil').setDescription('Bot iznini kaldır')
+        .addStringOption((o) => o.setName('id').setDescription('Botun kullanıcı kimliği').setRequired(true)))
+      .addSubcommand((s) => s.setName('liste').setDescription('İzinli botları göster')),
+    async (i) => {
+      const cfg = ctx.gcfg(i.guild.id);
+      cfg.allowedBots = cfg.allowedBots || [];
+      const sub = i.options.getSubcommand();
+      if (sub === 'liste') {
+        return respond(i, cfg.allowedBots.length ? `✅ İzinli botlar:\n${cfg.allowedBots.map((b) => `• <@${b}> (${code(b)})`).join('\n')}` : 'ℹ️ İzinli bot yok. Yetkisiz eklenen botlar atılır.');
+      }
+      const id = (i.options.getString('id', true).match(/\d{15,25}/) || [])[0];
+      if (!id) return respond(i, '❌ Geçerli bir kullanıcı kimliği gir (15-25 haneli sayı).');
+      if (sub === 'ekle') {
+        if (!cfg.allowedBots.includes(id)) cfg.allowedBots.push(id);
+        ctx.save();
+        ctx.events.append(i.guild.id, { type: 'BOT_ALLOW', actor: i.user.id, target: id });
+        return respond(i, `✅ <@${id}> (${code(id)}) izinli. Bot şimdi eklenirse atılmaz.`);
+      }
+      cfg.allowedBots = cfg.allowedBots.filter((b) => b !== id);
+      ctx.save();
+      return respond(i, `✅ <@${id}> izni kaldırıldı.`);
+    },
+    { access: 'admin' },
+  );
 
   async function handleEntry(entry, guild) {
     const cfg = ctx.gcfg(guild.id);
