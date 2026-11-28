@@ -263,16 +263,19 @@ export async function load() {
     enabled = next;
     for (const g of realClient.guilds.cache.values()) {
       let lang = 'en';
-      try { lang = (await G.get(g.id, 'language')) === 'tr' ? 'tr' : 'en'; } catch { /* default */ }
+      try { const l = await G.get(g.id, 'language'); lang = l === 'tr' || l === 'az' ? l : 'en'; } catch { /* default */ }
       langs.set(g.id, lang);
       if (enabled.has(g.id)) { try { ctx.gcfg(g.id).locale = lang; } catch { /* ignore */ } }
     }
     if (realClient.isReady?.()) for (const id of added) { const g = realClient.guilds.cache.get(id); if (g) await onEnable(g); }
   }
 
-  const offText = (gid) => (langs.get(gid) === 'tr'
-    ? '🛡️ Gigglo Güvenlik bu sunucuda kapalı. Açtırmak için bot sahibine ulaş.'
-    : '🛡️ Gigglo Security is not enabled on this server. Ask the bot owner to turn it on.');
+  const OFF = {
+    tr: '🛡️ Gigglo Güvenlik bu sunucuda kapalı. Açtırmak için bot sahibine ulaş.',
+    az: '🛡️ Gigglo Təhlükəsizlik bu serverdə bağlıdır. Açdırmaq üçün bot sahibinə müraciət et.',
+    en: '🛡️ Gigglo Security is not enabled on this server. Ask the bot owner to turn it on.',
+  };
+  const offText = (gid) => OFF[langs.get(gid)] || OFF.en;
 
   const owns = (i) => {
     if (i.isChatInputCommand?.() || i.isContextMenuCommand?.() || i.isAutocomplete?.()) return ctx.router.names().includes(i.commandName);

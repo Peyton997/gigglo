@@ -1,6 +1,6 @@
 # Gigglo
 
-Gigglo is a bilingual (EN/TR) Discord bot: **games** (57 fun/casino/social commands with a shared economy), **music** (YouTube / SoundCloud / Spotify-link search) and **protection** (Kalkan, an opt-in security module).
+Gigglo is a trilingual (EN/TR/AZ) Discord bot: **games** (57 fun/casino/social commands with a shared economy), **music** (YouTube / SoundCloud / Spotify-link search) and **protection** (Kalkan, an opt-in security module).
 
 | File | What it is |
 | --- | --- |
