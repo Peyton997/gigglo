@@ -10,6 +10,12 @@ try { process.env.PATH = ffmpegInstaller.path.replace(/\/ffmpeg$/, '') + ':' + p
 process.on('unhandledRejection', (e: any) => console.error('[unhandledRejection]', e?.message || e));
 process.on('uncaughtException', (e: any) => console.error('[uncaughtException]', e?.message || e));
 
+// Extra bot owners (comma-separated Discord IDs) are merged into OWNER_IDS, which both Gigglo and Kalkan read.
+if (Bun.env.EXTRA_OWNER_IDS) {
+  const ids = [...(Bun.env.OWNER_IDS || '').split(','), ...Bun.env.EXTRA_OWNER_IDS.split(',')].map((x) => x.trim()).filter(Boolean);
+  process.env.OWNER_IDS = [...new Set(ids)].join(',');
+}
+
 const dir = import.meta.dir;
 (globalThis as any).__loadMusic = () => import(dir + '/music.mjs');
 // Kalkan security module: only when KALKAN=1 (needs the Server Members intent enabled in the Discord Developer Portal).
