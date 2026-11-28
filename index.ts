@@ -1,27 +1,27 @@
-import 'discord.js';
-import '@napi-rs/canvas';
-import '@discordjs/voice';
-import 'play-dl';
-import 'opusscript';
-import 'libsodium-wrappers';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+// Launcher. Bun's HTTP parser rejects YouTube's large response headers ("Parse Error: Header overflow")
+// at the default 16 KiB, and the flag can only be set on the command line (not via env or code).
+// Render's start command is fixed to `bun run index.ts`, so re-run ourselves once with the flag.
+import http from 'node:http';
 
-try { process.env.PATH = ffmpegInstaller.path.replace(/\/ffmpeg$/, '') + ':' + process.env.PATH; } catch {}
-process.on('unhandledRejection', (e: any) => console.error('[unhandledRejection]', e?.message || e));
-process.on('uncaughtException', (e: any) => console.error('[uncaughtException]', e?.message || e));
-
+const WANT = 65536;
 const dir = import.meta.dir;
-(globalThis as any).__loadMusic = () => import(dir + '/music.mjs');
-// Kalkan security module: only when KALKAN=1 (needs the Server Members intent enabled in the Discord Developer Portal).
-if (Bun.env.KALKAN === '1') {
-  (globalThis as any).__loadKalkan = async () => { const m = await import(dir + '/kalkan-adapter.mjs'); await m.load(); };
-}
-try {
-  await import(dir + '/bot.tsx');
-} catch (e) {
-  console.error('Bot code failed to load:', e);
-}
 
-// Keep Render's free tier awake: ping our own public URL every 10 minutes.
-const selfUrl = Bun.env.RENDER_EXTERNAL_URL;
-if (selfUrl) setInterval(() => { fetch(selfUrl).catch(() => {}); }, 10 * 60 * 1000);
+if (http.maxHeaderSize >= WANT || Bun.env.GIGGLO_CHILD === '1') {
+  await import(dir + '/app.ts');
+} else {
+  let child: ReturnType<typeof Bun.spawn> | null = null;
+  try {
+    child = Bun.spawn([process.execPath, `--max-http-header-size=${WANT}`, 'run', dir + '/app.ts'], {
+      stdio: ['inherit', 'inherit', 'inherit'],
+      env: { ...process.env, GIGGLO_CHILD: '1' },
+    });
+  } catch (e: any) {
+    console.error('[launcher] could not re-run with larger header size, continuing without it:', e?.message || e);
+  }
+  if (child) {
+    for (const sig of ['SIGTERM', 'SIGINT'] as const) process.on(sig, () => { try { child!.kill(sig); } catch {} });
+    process.exit(await child.exited);
+  } else {
+    await import(dir + '/app.ts');
+  }
+}

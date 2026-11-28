@@ -4,7 +4,8 @@ Gigglo is a trilingual (EN/TR/AZ) Discord bot: **games** (57 fun/casino/social c
 
 | File | What it is |
 | --- | --- |
-| `index.ts` | Entry point (Render start command: `bun run index.ts`). Keep-alive ping, loads the modules below. |
+| `index.ts` | Launcher (Render start command: `bun run index.ts`). Re-runs itself with a larger HTTP header limit, then loads `app.ts`. |
+| `app.ts` | The real entry point. Keep-alive ping, loads the modules below. |
 | `bot.tsx` | Games, economy, profile card, `/owner` and `/admin` panels, help. |
 | `music.mjs` | Music module. |
 | `kalkan-adapter.mjs` + `kalkan/` | Kalkan security module (anti-nuke, auto-moderation, raid shield, backups, recovery…). |
