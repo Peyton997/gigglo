@@ -9,6 +9,7 @@ const DEFAULT_RECOVERY_MESSAGE =
 const DEFAULTS = {
   channels: { log: null, alert: null, quarantine: null, watch: null, honeypot: [] },
   trusted: [],
+  allowedBots: [], // yetkisiz bot ekleme korumasından muaf bot kimlikleri
   exemptRoles: [],
   modules: {
     antinuke: true, automod: true, files: true, secrets: true, honeypot: true, raid: true,

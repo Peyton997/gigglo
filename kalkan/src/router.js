@@ -14,13 +14,13 @@ function createRouter() {
   const completers = new Map();
   const stats = { total: 0, errors: 0, denied: 0, lastMs: 0, maxMs: 0 };
 
-  function addPrefix(kind, prefix, fn) {
+  function addPrefix(kind, prefix, fn, meta = {}) {
     if (!prefix) throw new Error(`${kind} öneki boş olamaz`);
     if (comps[kind].some((c) => c.prefix === prefix)) throw new Error(`Yinelenen ${kind} öneki: ${prefix}`);
-    comps[kind].push({ prefix, fn });
+    comps[kind].push({ prefix, fn, meta });
     comps[kind].sort((a, b) => b.prefix.length - a.prefix.length); // en uzun önek önce eşleşsin
   }
-  const findPrefix = (kind, id) => comps[kind].find((c) => id.startsWith(c.prefix))?.fn || null;
+  const findPrefix = (kind, id) => comps[kind].find((c) => id.startsWith(c.prefix)) || null;
 
   const STAFF_BITS = [P.ModerateMembers, P.KickMembers, P.BanMembers, P.ManageMessages].filter(Boolean);
 
@@ -56,9 +56,9 @@ function createRouter() {
       builders.push(builder);
       handlers.set(builder.name, { fn: handler, meta });
     },
-    button(prefix, fn) { addPrefix('button', prefix, fn); },
-    select(prefix, fn) { addPrefix('select', prefix, fn); },
-    modal(prefix, fn) { addPrefix('modal', prefix, fn); },
+    button(prefix, fn, meta) { addPrefix('button', prefix, fn, meta); },
+    select(prefix, fn, meta) { addPrefix('select', prefix, fn, meta); },
+    modal(prefix, fn, meta) { addPrefix('modal', prefix, fn, meta); },
     autocomplete(commandName, fn) { completers.set(commandName, fn); },
     json() { return builders.map((b) => b.toJSON()); },
     names() { return [...handlers.keys()]; },
@@ -81,11 +81,11 @@ function createRouter() {
         const h = handlers.get(interaction.commandName);
         if (h) { fn = h.fn; meta = h.meta; label = `/${interaction.commandName}`; }
       } else if (interaction.isButton?.()) {
-        fn = findPrefix('button', interaction.customId); label = interaction.customId;
+        const c = findPrefix('button', interaction.customId); if (c) { fn = c.fn; meta = c.meta || {}; } label = interaction.customId;
       } else if (interaction.isAnySelectMenu?.() || interaction.isStringSelectMenu?.()) {
-        fn = findPrefix('select', interaction.customId); label = interaction.customId;
+        const c = findPrefix('select', interaction.customId); if (c) { fn = c.fn; meta = c.meta || {}; } label = interaction.customId;
       } else if (interaction.isModalSubmit?.()) {
-        fn = findPrefix('modal', interaction.customId); label = interaction.customId;
+        const c = findPrefix('modal', interaction.customId); if (c) { fn = c.fn; meta = c.meta || {}; } label = interaction.customId;
       }
       if (!fn) return;
 

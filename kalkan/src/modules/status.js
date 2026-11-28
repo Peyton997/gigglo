@@ -214,17 +214,8 @@ function init(ctx) {
       // geri-al
       if (!ctx.isTrusted(guild, i.user.id)) return respond(i, '🔒 Bu işlem yalnızca güvenilir yetkililer içindir.');
       await i.deferReply({ flags: MessageFlags.Ephemeral });
-      const done = [];
-      const mem = await guild.members.fetch(u.id).catch(() => null);
-      if (!mem) return respond(i, 'ℹ️ Üye sunucuda değil.');
-      if (ctx.risk) {
-        const n = await ctx.risk.restoreRoles(guild, u.id).catch(() => 0);
-        if (n) done.push(`${n} rol iade edildi`);
-      }
-      if (mem.communicationDisabledUntilTimestamp > Date.now()) {
-        try { await mem.timeout(null, `Kalkan: ${i.user.username} geri aldı`); done.push('susturma kaldırıldı'); } catch { done.push('susturma kaldırılamadı (yetki)'); }
-      }
-      if (m && m.risk && m.risk.score) { m.risk = { score: 0, at: Date.now(), reasons: [] }; ctx.save(); done.push('risk skoru sıfırlandı'); }
+      const done = ctx.risk ? await ctx.risk.undo(guild, u.id, i.user.username) : [];
+      if (done === null) return respond(i, 'ℹ️ Üye sunucuda değil.');
       ctx.events.append(guild.id, { type: 'UNDO', actor: i.user.id, target: u.id });
       await ctx.alert({ guild, level: 'info', title: 'Önlemler geri alındı', description: `<@${i.user.id}>, <@${u.id}> için otomatik önlemleri geri aldı.\n${done.join(', ') || 'Geri alınacak bir şey yoktu.'}` });
       return respond(i, done.length ? `✅ ${done.join(', ')}.` : 'ℹ️ Geri alınacak bir şey yoktu.');

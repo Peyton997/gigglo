@@ -162,3 +162,88 @@ test('Modül kapalıyken sayaç çalışmaz', async () => {
     assert.equal(h.alerts.length, 0);
   } finally { h.cleanup(); }
 });
+
+/* ---------------------------------------------------- bot izni ve geri yükleme düğmeleri */
+const fakeButton = (customId, userId, { dm = false, guildId = null } = {}) => {
+  const out = { replies: [], updates: [] };
+  const i = {
+    customId, user: { id: userId, username: 'tester' }, guildId: dm ? null : guildId, guild: null,
+    message: { components: [] }, deferred: false, replied: false,
+    isAutocomplete: () => false, isChatInputCommand: () => false, isUserContextMenuCommand: () => false,
+    isMessageContextMenuCommand: () => false, isButton: () => true, inGuild: () => !dm,
+    reply: async (p) => { i.replied = true; out.replies.push(p); },
+    deferReply: async () => { i.deferred = true; },
+    followUp: async (p) => { out.replies.push(p); },
+    editReply: async (p) => { out.replies.push(p); },
+    update: async (p) => { out.updates.push(p); },
+  };
+  return { i, out };
+};
+const OWNER = '900000000000000001';
+
+test('Yetkisiz bot uyarısında "izin ver" ve "yetkiyi geri yükle" düğmeleri bulunur', async () => {
+  const h = setup();
+  try {
+    const adder = h.guild.addMember(fakeMember('710000000000000010', { guild: h.guild }));
+    const bot = h.guild.addMember(fakeMember('710000000000000011', { guild: h.guild, bot: true }));
+    await h.emit({ action: A.BotAdd, executorId: adder.id, targetId: bot.id, changes: [] });
+    const al = h.alerts.find((a) => /Yetkisiz bot/.test(a.title));
+    assert.ok(al && al.components && al.components.length === 1, 'düğme satırı olmalı');
+    const ids = al.components[0].components.map((b) => b.data.custom_id);
+    assert.deepEqual(ids, [`kb:allow:${h.guild.id}:${bot.id}`, `kb:restore:${h.guild.id}:${adder.id}`]);
+  } finally { h.cleanup(); }
+});
+
+test('Aynı botu tekrar eklemek risk puanını katlamaz', async () => {
+  const h = setup();
+  try {
+    const adder = h.guild.addMember(fakeMember('710000000000000012', { guild: h.guild }));
+    const bot = h.guild.addMember(fakeMember('710000000000000013', { guild: h.guild, bot: true }));
+    for (let n = 0; n < 3; n++) await h.emit({ action: A.BotAdd, executorId: adder.id, targetId: bot.id, changes: [] });
+    assert.equal(h.ctx.risk.current(h.guild.id, adder.id), 40, '3 deneme tek sinyal sayılmalı');
+    assert.ok(!h.alerts.some((a) => a.level === 'critical'), 'hesap ele geçirilmiş önlemi tetiklenmemeli');
+  } finally { h.cleanup(); }
+});
+
+test('"İzin ver" düğmesi (DM dahil) botu listeye ekler; sonraki eklemede bot atılmaz', async () => {
+  const h = setup();
+  try {
+    const adder = h.guild.addMember(fakeMember('710000000000000014', { guild: h.guild }));
+    const bot = h.guild.addMember(fakeMember('710000000000000015', { guild: h.guild, bot: true }));
+    // yetkisiz kişi basarsa reddedilir
+    const bad = fakeButton(`kb:allow:${h.guild.id}:${bot.id}`, adder.id, { dm: true });
+    await h.ctx.router.dispatch(h.ctx, bad.i);
+    assert.ok(!h.cfg.allowedBots.includes(bot.id), 'yetkisiz kişi izin veremez');
+    // bot sahibi DM'den basar
+    const ok = fakeButton(`kb:allow:${h.guild.id}:${bot.id}`, OWNER, { dm: true });
+    await h.ctx.router.dispatch(h.ctx, ok.i);
+    assert.ok(h.cfg.allowedBots.includes(bot.id));
+    // aynı bot artık atılmaz
+    bot.kicked = false;
+    await h.emit({ action: A.BotAdd, executorId: adder.id, targetId: bot.id, changes: [] });
+    assert.equal(bot.kicked, false);
+    assert.ok(h.alerts.some((a) => /İzinli bot eklendi/.test(a.title)));
+  } finally { h.cleanup(); }
+});
+
+test('"Yetkiyi geri yükle" düğmesi alınan rolleri iade eder ve riski sıfırlar', async () => {
+  const h = setup();
+  try {
+    const role = fakeRole('adm', { permissions: ADMIN, name: 'Yönetici' });
+    h.guild.roles.cache.set('adm', role);
+    const user = h.guild.addMember(fakeMember('710000000000000016', { guild: h.guild }));
+    const m = h.ctx.members.ensure(h.guild.id, user.id);
+    m.stripped = ['adm'];
+    m.risk = { score: 100, at: Date.now(), reasons: ['x'] };
+    const { i, out } = fakeButton(`kb:restore:${h.guild.id}:${user.id}`, OWNER, { dm: true });
+    await h.ctx.router.dispatch(h.ctx, i);
+    assert.deepEqual(m.stripped, []);
+    assert.equal(h.ctx.risk.current(h.guild.id, user.id), 0);
+    assert.ok(out.replies.some((r) => /rol iade/.test(r.content || '')), JSON.stringify(out.replies));
+    // yetkisiz kişi basarsa hiçbir şey olmaz
+    m.stripped = ['adm'];
+    const bad = fakeButton(`kb:restore:${h.guild.id}:${user.id}`, '710000000000000099', { dm: true });
+    await h.ctx.router.dispatch(h.ctx, bad.i);
+    assert.deepEqual(m.stripped, ['adm']);
+  } finally { h.cleanup(); }
+});
